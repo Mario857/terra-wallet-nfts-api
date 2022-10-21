@@ -1,0 +1,10 @@
+.next/
+out/
+build/
+node_modules/
+.DS_Store
+.env
+.idea
+tsconfig.tsbuildinfo
+.vscode
+*.code-workspace
