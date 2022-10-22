@@ -2,22 +2,23 @@ const { LCDClient } = require("@terra-money/terra.js");
 const express = require("express");
 const bodyParser = require("body-parser");
 const { queryWalletNFTs } = require("./queryWalletNFTs");
-const fs = require("fs/promises");
 const { isValidTerraAddress } = require("./isValidTerraAddress");
-const { getAllCw721Contracts } = require("./getAllCw721Contract");
+const { syncAllCw721Contracts } = require("./syncAllCw721Contracts");
 const cron = require("node-cron");
 const AsyncLock = require("async-lock");
+const { getContractsData } = require("./cache");
 const lock = new AsyncLock();
+const redisClient = require("redis").createClient(process.env.REDIS_URL);
 
 const lcdClient = new LCDClient({
-  URL: "https://phoenix-lcd.terra.dev",
-  chainID: "phoenix-1",
+  URL: "https://pisco-lcd.terra.dev",
+  chainID: "pisco-1",
 });
 
 (async () => {
-  const freshCw721s = await getAllCw721Contracts(lcdClient);
+  await redisClient.connect();
 
-  await fs.writeFile("cw721s.json", JSON.stringify(freshCw721s));
+  await syncAllCw721Contracts(lcdClient, redisClient);
 })();
 
 // Initialize express
@@ -36,8 +37,8 @@ app.get("/:walletAddress", async function (req, res) {
   lock.acquire(
     walletAddress,
     async function () {
-      let cw721s = JSON.parse(await fs.readFile("./cw721s.json"));
-      return queryWalletNFTs(lcdClient, cw721s, walletAddress);
+      let cache = await getContractsData(redisClient);
+      return queryWalletNFTs(lcdClient, cache?.data ?? [], walletAddress);
     },
     function (error, result) {
       if (error) {
@@ -52,8 +53,4 @@ app.listen(8080, function () {
   console.log("[app]: server is listening on port 8080");
 });
 
-cron.schedule("0 */12 * * *", async () => {
-  const freshCw721s = await getAllCw721Contracts(lcdClient);
-
-  await fs.writeFile("cw721s.json", JSON.stringify(freshCw721s));
-});
+cron.schedule("0 */12 * * *", async () => syncAllCw721Contracts(lcdClient));
