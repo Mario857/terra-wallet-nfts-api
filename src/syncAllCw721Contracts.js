@@ -3,12 +3,12 @@ const pMap = (...args) => import("p-map").then(({ default: pMap }) => pMap(...ar
 const { asyncAction } = require("./asyncAction");
 const { parseTxResult } = require("./parseTxResult");
 const promiseRetry = require("promise-retry");
-const { getContractsData, appendContractsData } = require("./cache");
+const { getCw721sContractsData, appendCw721sContractsData } = require("./cache");
 
 async function syncAllCw721Contracts(lcdClient, redisClient) {
   console.log("[syncAllCw721Contracts]: API starts fetching cw721Contracts");
 
-  const cachedData = await getContractsData(redisClient);
+  const cachedData = await getCw721sContractsData(redisClient);
 
   console.log(`[syncAllCw721Contracts]: Starting offset ${cachedData.lastOffset}`);
 
@@ -76,7 +76,7 @@ async function syncAllCw721Contracts(lcdClient, redisClient) {
 
       const parsedCw721 = cw721s.filter((x) => x);
 
-      await appendContractsData(redisClient, {
+      await appendCw721sContractsData(redisClient, {
         lastOffset: lastPage,
         data: parsedCw721,
       });
