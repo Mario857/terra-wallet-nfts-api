@@ -88,7 +88,7 @@ app.get("/wallet-nfts/:walletAddress", async function (req, res) {
 
       const toQuery = intersectionWith(interactedContracts, cache?.data ?? [], isEqual);
 
-      return queryWalletNFTs(lcdClient, toQuery, walletAddress);
+      return queryWalletNFTs(lcdClient, redisClient, toQuery, walletAddress);
     },
     function (error, result) {
       if (error) {

@@ -1,6 +1,7 @@
 const pMap = (...args) => import("p-map").then(({ default: pMap }) => pMap(...args));
 const { last } = require("lodash");
 const { asyncAction } = require("./asyncAction");
+const { getNFTInfoCached } = require("./cache");
 const { keysToCamel } = require("./keysToCamel");
 
 async function queryUserTokensUntilEnd(lcdClient, contractAddress, walletAddress) {
@@ -28,35 +29,14 @@ async function queryUserTokensUntilEnd(lcdClient, contractAddress, walletAddress
   return results.flat().filter((x) => x);
 }
 
-async function queryWalletNFTs(lcdClient, cw721s, walletAddress) {
+async function queryWalletNFTs(lcdClient, redisClient, cw721s, walletAddress) {
   const usersCw721s = await pMap(
     cw721s,
     async (contractAddress) => {
       const usersTokens = await queryUserTokensUntilEnd(lcdClient, contractAddress, walletAddress);
 
       if (usersTokens) {
-        return pMap(usersTokens, async (tokenId) => {
-          const [error, info] = await asyncAction(
-            lcdClient.wasm.contractQuery(contractAddress, {
-              all_nft_info: {
-                token_id: tokenId,
-              },
-            })
-          );
-
-          if (error) {
-            console.log(error);
-          }
-
-          if (info) {
-            return {
-              contractAddress,
-              ...info?.info,
-            };
-          }
-
-          return null;
-        });
+        return pMap(usersTokens, async (tokenId) => getNFTInfoCached(lcdClient, redisClient, contractAddress, tokenId));
       }
     },
     { concurrency: 30 }
