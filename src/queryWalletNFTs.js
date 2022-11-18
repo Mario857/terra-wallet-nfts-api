@@ -1,48 +1,86 @@
-const pMap = (...args) => import("p-map").then(({ default: pMap }) => pMap(...args));
-const { last } = require("lodash");
-const { asyncAction } = require("./asyncAction");
-const { getNFTInfoCached } = require("./cache");
+const { compact, last } = require("lodash");
 const { keysToCamel } = require("./keysToCamel");
+const { batchContractQuery } = require("./wasm");
 
-async function queryUserTokensUntilEnd(lcdClient, contractAddress, walletAddress) {
-  let startAfter = undefined;
-  const results = [];
+async function queryUntilEnd(userAddress, cw721Addresses) {
+  let processingAddresses = Object.fromEntries(
+    cw721Addresses.map((address) => [address, { completed: false, startAfter: undefined }])
+  );
 
+  const result = [];
+  const LIMIT = 30;
   do {
-    const [, usersTokens] = await asyncAction(
-      lcdClient.wasm.contractQuery(contractAddress, {
-        tokens: {
-          owner: walletAddress,
-          limit: 30,
-          start_after: startAfter,
+    const filteredCw721Addresses = cw721Addresses.filter((address) => !processingAddresses[address].completed);
+    const ownerIds = await batchContractQuery(
+      filteredCw721Addresses.map((contractAddress) => ({
+        contractAddress,
+        query: {
+          tokens: {
+            start_after: processingAddresses[contractAddress]?.startAfter,
+            owner: userAddress,
+            limit: LIMIT,
+          },
         },
+      }))
+    );
+
+    const tokensIdsByContractAddress = compact(
+      ownerIds.flatMap(([error, data], index) => {
+        const contractAddress = filteredCw721Addresses[index];
+
+        if (error) {
+          return null;
+        }
+
+        const tokens = data?.tokens ?? data.ids ?? [];
+
+        processingAddresses = {
+          ...processingAddresses,
+          [filteredCw721Addresses[index]]: { completed: error ? true : !last(tokens), startAfter: last(tokens) },
+        };
+
+        if (!tokens.length) {
+          return null;
+        }
+
+        return tokens.map((tokenId) => ({ tokenId, contractAddress }));
       })
     );
 
-    const tokens = usersTokens?.tokens?.length ? usersTokens?.tokens : usersTokens.ids;
+    result.push(tokensIdsByContractAddress);
+  } while (Object.values(processingAddresses).some((process) => !process.completed));
 
-    startAfter = last(tokens);
-
-    results.push(tokens);
-  } while (startAfter);
-
-  return results.flat().filter((x) => x);
+  return result.flat();
 }
 
-async function queryWalletNFTs(lcdClient, redisClient, cw721s, walletAddress) {
-  const usersCw721s = await pMap(
-    cw721s,
-    async (contractAddress) => {
-      const usersTokens = await queryUserTokensUntilEnd(lcdClient, contractAddress, walletAddress);
+async function queryWalletNFTs(userAddress, cw721Addresses) {
+  const tokensIdsByContractAddress = await queryUntilEnd(userAddress, cw721Addresses);
 
-      if (usersTokens) {
-        return pMap(usersTokens, async (tokenId) => getNFTInfoCached(lcdClient, redisClient, contractAddress, tokenId));
-      }
-    },
-    { concurrency: 30 }
+  const ownedTokensInfo = await batchContractQuery(
+    tokensIdsByContractAddress.map(({ tokenId, contractAddress }) => ({
+      contractAddress,
+      query: {
+        all_nft_info: {
+          token_id: tokenId,
+        },
+      },
+    }))
   );
 
-  return keysToCamel(usersCw721s);
+  const ownedTokensParsed = compact(
+    ownedTokensInfo.map(([, data], index) => {
+      if (data) {
+        return {
+          ...data,
+          contractAddress: tokensIdsByContractAddress[index]?.contractAddress ?? null,
+        };
+      }
+
+      return null;
+    })
+  );
+
+  return keysToCamel(ownedTokensParsed);
 }
 
 module.exports = { queryWalletNFTs };

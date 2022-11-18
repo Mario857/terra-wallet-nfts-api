@@ -1,26 +1,26 @@
-const { isNil } = require("lodash");
-const pMap = (...args) => import("p-map").then(({ default: pMap }) => pMap(...args));
+const { isNil, compact } = require("lodash");
 const { asyncAction } = require("./asyncAction");
-const { parseTxResult } = require("./parseTxResult");
+const { parseInitializedContractTxResult } = require("./parseTxResult");
 const promiseRetry = require("promise-retry");
 const { getCw721sContractsData, appendCw721sContractsData } = require("./cache");
+const { batchContractQuery } = require("./wasm");
 
-async function syncAllCw721Contracts(lcdClient, redisClient) {
-  console.log("[syncAllCw721Contracts]: API starts fetching cw721Contracts");
+async function syncAllInitializedCw721Contracts(lcdClient, redisClient) {
+  console.log("[getAllInitializedCw721Contracts]: API starts fetching initialized");
 
   const cachedData = await getCw721sContractsData(redisClient);
 
-  console.log(`[syncAllCw721Contracts]: Starting offset ${cachedData.lastOffset}`);
+  console.log(`[getAllInitializedCw721Contracts]: Starting offset ${cachedData.lastOffset}`);
 
-  let result = [];
   let hasMore = false;
   let perPage = 100;
+  let lastPage = cachedData.lastOffset;
 
   const interactedContractsQuery = {
     events: [{ key: "message.action", value: "/cosmwasm.wasm.v1.MsgInstantiateContract" }],
   };
 
-  let page = cachedData.lastOffset;
+  let page = lastPage;
 
   do {
     const [error, data] = await asyncAction(
@@ -41,53 +41,45 @@ async function syncAllCw721Contracts(lcdClient, redisClient) {
     }
 
     if (data) {
-      const lastPage = page;
+      lastPage = page;
       console.warn(data.pagination);
       hasMore = !(data.txs.length < perPage);
 
       page += data.txs.length;
-      // Tx hashes you can search in Terra Finder, or anything else replace here
-      result.push(data.txs.flatMap((x) => parseTxResult(x)));
 
-      const cw721s = await pMap(
-        data.txs.flatMap((x) => parseTxResult(x)).map(({ ContractAddress }) => ContractAddress),
-        async (contractAddress) => {
-          const [error, result] = await asyncAction(
-            lcdClient.wasm.contractQuery(contractAddress, {
-              num_tokens: {},
-            })
-          );
+      const contractAddresses = data.txs
+        .flatMap((x) => parseInitializedContractTxResult(x))
+        .map(({ ContractAddress }) => ContractAddress);
 
-          if (error) {
-            let errorMessage = error?.response?.data?.message ?? "";
-
-            if (!errorMessage.includes("unknown variant") && !errorMessage.includes("invalid request")) {
-              console.log(errorMessage ?? "");
-            }
-          }
-          if (!isNil(result) && result?.count) {
-            return contractAddress;
-          }
-
-          return null;
-        },
-        { concurrency: 30 }
+      const cw721s = await batchContractQuery(
+        contractAddresses.map((contractAddress) => ({
+          contractAddress,
+          query: { num_tokens: {} },
+        }))
       );
 
-      const parsedCw721 = cw721s.filter((x) => x);
+      const cw721Addresses = compact(
+        cw721s.map(([error, result], index) => {
+          if (error) {
+            return null;
+          }
+          if (!isNil(result) && result?.count) {
+            return contractAddresses[index] ?? null;
+          }
+          return null;
+        })
+      );
 
       await appendCw721sContractsData(redisClient, {
         lastOffset: lastPage,
-        data: parsedCw721,
+        data: cw721Addresses,
       });
-
-      result.push(parsedCw721);
     }
   } while (hasMore);
 
-  console.log("[syncAllCw721Contracts]: API fetched cw721Contracts");
-
-  return [result.flat()];
+  console.log(`[getAllInitializedCw721Contracts]: Ending here`);
 }
 
-module.exports = { syncAllCw721Contracts };
+
+
+module.exports = { syncAllInitializedCw721Contracts };

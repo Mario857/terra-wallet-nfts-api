@@ -14,5 +14,5 @@ npm install
 node run src/index.js
 
 # Replace <terra1-wallet-address> with wallet you want to query
-curl localhost:8080/<terra1-wallet-address>
+curl localhost:8080/wallet-nfts/<terra1-wallet-address>
 ```
