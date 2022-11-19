@@ -67,4 +67,4 @@ app.listen(parseInt(API_PORT, 10), function () {
   console.log(`[app]: server is listening on port ${API_PORT}`);
 });
 
-cron.schedule("* */5 * * *", async () => syncAllInitializedCw721Contracts(lcdClient, redisClient));
+cron.schedule("*/10 * * * *", async () => syncAllInitializedCw721Contracts(lcdClient, redisClient));
