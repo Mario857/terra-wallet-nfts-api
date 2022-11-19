@@ -10,7 +10,7 @@ const AsyncLock = require("async-lock");
 const { getCw721sContractsData } = require("./cache");
 const { initWasmBatchClient } = require("./wasm");
 const cors = require("cors");
-const { LCD_URL, CHAIN_ID } = require("./config");
+const { LCD_URL, CHAIN_ID, API_PORT } = require("./config");
 const lock = new AsyncLock();
 const redisClient = require("redis").createClient(process.env.REDIS_URL);
 
@@ -63,8 +63,8 @@ app.get("/contracts/all", async function (req, res) {
   res.send(cache.data ?? []);
 });
 
-app.listen(8080, function () {
-  console.log("[app]: server is listening on port 8080");
+app.listen(parseInt(API_PORT, 10), function () {
+  console.log(`[app]: server is listening on port ${API_PORT}`);
 });
 
 cron.schedule("* */5 * * *", async () => syncAllInitializedCw721Contracts(lcdClient, redisClient));
