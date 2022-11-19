@@ -82,6 +82,7 @@ async function queryWalletNFTs(userAddress, cw721s) {
     })
   );
 
+
   return formatResponse(ownedTokensParsed);
 }
 

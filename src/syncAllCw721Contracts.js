@@ -83,7 +83,7 @@ async function syncAllInitializedCw721Contracts(lcdClient, redisClient) {
             return null;
           }
           if (!isNil(result) && result?.name) {
-            return { name: result.name, contractAddress: result.contractAddress };
+            return { symbol: result.symbol ?? "", name: result.name, contractAddress: result.contractAddress };
           }
           return null;
         })
