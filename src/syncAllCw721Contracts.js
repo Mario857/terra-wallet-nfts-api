@@ -6,11 +6,11 @@ const { getCw721sContractsData, appendCw721sContractsData } = require("./cache")
 const { batchContractQuery } = require("./wasm");
 
 async function syncAllInitializedCw721Contracts(lcdClient, redisClient) {
-  console.log("[getAllInitializedCw721Contracts]: API starts fetching initialized");
+  console.log("[syncAllInitializedCw721Contracts]: API starts fetching initialized");
 
   const cachedData = await getCw721sContractsData(redisClient);
 
-  console.log(`[getAllInitializedCw721Contracts]: Starting offset ${cachedData.lastOffset}`);
+  console.log(`[syncAllInitializedCw721Contracts]: Starting offset ${cachedData.lastOffset}`);
 
   let hasMore = false;
   let perPage = 100;
@@ -51,7 +51,7 @@ async function syncAllInitializedCw721Contracts(lcdClient, redisClient) {
         .flatMap((x) => parseInitializedContractTxResult(x))
         .map(({ ContractAddress }) => ContractAddress);
 
-      const cw721s = await batchContractQuery(
+      const rawCw721s = await batchContractQuery(
         contractAddresses.map((contractAddress) => ({
           contractAddress,
           query: { num_tokens: {} },
@@ -59,12 +59,31 @@ async function syncAllInitializedCw721Contracts(lcdClient, redisClient) {
       );
 
       const cw721Addresses = compact(
-        cw721s.map(([error, result], index) => {
+        rawCw721s.map(([error, result]) => {
           if (error) {
             return null;
           }
           if (!isNil(result) && result?.count) {
-            return contractAddresses[index] ?? null;
+            return result.contractAddress ?? null;
+          }
+          return null;
+        })
+      );
+
+      const rawContractInfos = await batchContractQuery(
+        cw721Addresses.map((contractAddress) => ({
+          contractAddress,
+          query: { contract_info: {} },
+        }))
+      );
+
+      const contractInfos = compact(
+        rawContractInfos.map(([error, result]) => {
+          if (error) {
+            return null;
+          }
+          if (!isNil(result) && result?.name) {
+            return { name: result.name, contractAddress: result.contractAddress };
           }
           return null;
         })
@@ -72,14 +91,12 @@ async function syncAllInitializedCw721Contracts(lcdClient, redisClient) {
 
       await appendCw721sContractsData(redisClient, {
         lastOffset: lastPage,
-        data: cw721Addresses,
+        data: contractInfos,
       });
     }
   } while (hasMore);
 
   console.log(`[getAllInitializedCw721Contracts]: Ending here`);
 }
-
-
 
 module.exports = { syncAllInitializedCw721Contracts };

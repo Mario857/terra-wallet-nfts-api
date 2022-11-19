@@ -1,3 +1,4 @@
+require("dotenv").config();
 const { LCDClient } = require("@terra-money/terra.js");
 const express = require("express");
 const bodyParser = require("body-parser");
@@ -7,19 +8,21 @@ const { syncAllInitializedCw721Contracts } = require("./syncAllCw721Contracts");
 const cron = require("node-cron");
 const AsyncLock = require("async-lock");
 const { getCw721sContractsData } = require("./cache");
-const { initWasmClient } = require("./wasm");
+const { initWasmBatchClient } = require("./wasm");
+const cors = require("cors");
+const { LCD_URL, CHAIN_ID } = require("./config");
 const lock = new AsyncLock();
 const redisClient = require("redis").createClient(process.env.REDIS_URL);
 
 const lcdClient = new LCDClient({
-  URL: "https://phoenix-lcd.terra.dev",
-  chainID: "phoenix-1",
+  URL: LCD_URL,
+  chainID: CHAIN_ID,
 });
 
 (async () => {
   await redisClient.connect();
 
-  await initWasmClient();
+  await initWasmBatchClient();
 
   await syncAllInitializedCw721Contracts(lcdClient, redisClient);
 })();
@@ -28,9 +31,10 @@ const lcdClient = new LCDClient({
 let app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+app.use(cors());
 
 // Query by wallet address
-app.get("/:walletAddress", async function (req, res) {
+app.get("/nft-wallet/:walletAddress", async function (req, res) {
   const { walletAddress } = req.params;
 
   if (!isValidTerraAddress(walletAddress)) {
@@ -42,13 +46,13 @@ app.get("/:walletAddress", async function (req, res) {
     async function () {
       let cache = await getCw721sContractsData(redisClient);
 
-      return queryWalletNFTs(lcdClient, redisClient, cache?.data ?? [], walletAddress);
+      return queryWalletNFTs(walletAddress, cache.data ?? []);
     },
     function (error, result) {
       if (error) {
         return res.status(500).send(error);
       }
-      res.send(result.flat());
+      res.send(result);
     }
   );
 });
@@ -59,23 +63,8 @@ app.get("/contracts/all", async function (req, res) {
   res.send(cache.data ?? []);
 });
 
-// Query by wallet address
-app.get("/wallet-nfts/:walletAddress", async function (req, res) {
-  const { walletAddress } = req.params;
-
-  if (!isValidTerraAddress(walletAddress)) {
-    return res.status(500).send("Invalid wallet address!");
-  }
-
-  let cache = await getCw721sContractsData(redisClient);
-
-  const nfts = await  queryWalletNFTs(walletAddress, cache.data ?? []);
-
-  res.send(nfts);
-});
-
 app.listen(8080, function () {
   console.log("[app]: server is listening on port 8080");
 });
 
-cron.schedule("0 */12 * * *", async () => syncAllInitializedCw721Contracts(lcdClient, redisClient));
+cron.schedule("* */5 * * *", async () => syncAllInitializedCw721Contracts(lcdClient, redisClient));

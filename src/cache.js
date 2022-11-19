@@ -1,6 +1,6 @@
-const CACHE_PREFIX = "mainnet";
+const { CHAIN_ID } = require("./config");
 
-const CACHE_KEY = `${CACHE_PREFIX}_cw721_contracts`;
+const CACHE_KEY = `${CHAIN_ID}_cw721_contracts`;
 
 const defaultData = {
   lastOffset: 1,

@@ -1,5 +1,5 @@
 const { compact, last } = require("lodash");
-const { keysToCamel } = require("./keysToCamel");
+const { formatResponse } = require("./formatResponse");
 const { batchContractQuery } = require("./wasm");
 
 async function queryUntilEnd(userAddress, cw721Addresses) {
@@ -26,8 +26,6 @@ async function queryUntilEnd(userAddress, cw721Addresses) {
 
     const tokensIdsByContractAddress = compact(
       ownerIds.flatMap(([error, data], index) => {
-        const contractAddress = filteredCw721Addresses[index];
-
         if (error) {
           return null;
         }
@@ -43,7 +41,7 @@ async function queryUntilEnd(userAddress, cw721Addresses) {
           return null;
         }
 
-        return tokens.map((tokenId) => ({ tokenId, contractAddress }));
+        return tokens.map((tokenId) => ({ tokenId, contractAddress: data.contractAddress }));
       })
     );
 
@@ -53,8 +51,11 @@ async function queryUntilEnd(userAddress, cw721Addresses) {
   return result.flat();
 }
 
-async function queryWalletNFTs(userAddress, cw721Addresses) {
-  const tokensIdsByContractAddress = await queryUntilEnd(userAddress, cw721Addresses);
+async function queryWalletNFTs(userAddress, cw721s) {
+  const tokensIdsByContractAddress = await queryUntilEnd(
+    userAddress,
+    cw721s.map((cw721) => cw721.contractAddress)
+  );
 
   const ownedTokensInfo = await batchContractQuery(
     tokensIdsByContractAddress.map(({ tokenId, contractAddress }) => ({
@@ -64,15 +65,16 @@ async function queryWalletNFTs(userAddress, cw721Addresses) {
           token_id: tokenId,
         },
       },
+      extend: { tokenId },
     }))
   );
 
   const ownedTokensParsed = compact(
-    ownedTokensInfo.map(([, data], index) => {
+    ownedTokensInfo.map(([, data]) => {
       if (data) {
         return {
           ...data,
-          contractAddress: tokensIdsByContractAddress[index]?.contractAddress ?? null,
+          ...cw721s.find((cw721) => cw721.contractAddress === data.contractAddress),
         };
       }
 
@@ -80,7 +82,7 @@ async function queryWalletNFTs(userAddress, cw721Addresses) {
     })
   );
 
-  return keysToCamel(ownedTokensParsed);
+  return formatResponse(ownedTokensParsed);
 }
 
 module.exports = { queryWalletNFTs };
