@@ -1,7 +1,10 @@
 ## Node Js Terra Wallet NFTs API
 
 ### API for querying all wallet NFTs for specific user
+API indexes all initialized cw721 contracts and caches using Redis DB, looks for new every 10 minutes. Starting from latest offset. 
 
+Then uses batch querying on each contract to get users NFTs. If user has > 30 NFTs of specific collection. It queries till end.
+It also supports Talis.
 
 ## Running with docker compose
 * Docker
