@@ -10,9 +10,11 @@ const AsyncLock = require("async-lock");
 const { getCw721sContractsData } = require("./cache");
 const { initWasmBatchClient } = require("./wasm");
 const cors = require("cors");
-const { LCD_URL, CHAIN_ID, API_PORT } = require("./config");
+const { LCD_URL, CHAIN_ID, API_PORT, REDIS_URL } = require("./config");
 const lock = new AsyncLock();
-const redisClient = require("redis").createClient(process.env.REDIS_URL);
+const redisClient = require("redis").createClient({
+  url: REDIS_URL,
+});
 
 const lcdClient = new LCDClient({
   URL: LCD_URL,

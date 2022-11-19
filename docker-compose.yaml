@@ -5,3 +5,27 @@ services:
     container_name: cache
     ports:
       - "6379:6379"
+  wallet-nfts-testnet:
+    build: .
+    ports:
+      - "3010:3010"
+    depends_on:
+      - redis
+    environment:
+      RPC_URL: "https://terra-testnet-rpc.polkachu.com"
+      CHAIN_ID: "pisco-1"
+      LCD_URL: "https://pisco-lcd.terra.dev"
+      API_PORT: "3010"
+      REDIS_URL: "redis://redis:6379"
+  wallet-nfts-mainnet:
+    build: .
+    ports:
+      - "3020:3020"
+    depends_on:
+      - redis
+    environment:
+      RPC_URL: "https://terra-rpc.polkachu.com"
+      CHAIN_ID: "phoenix-1"
+      LCD_URL: "https://phoenix-lcd.terra.dev"
+      API_PORT: "3020"
+      REDIS_URL: "redis://redis:6379"
