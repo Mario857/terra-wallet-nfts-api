@@ -1,3 +1,4 @@
+const { uniqBy } = require("lodash");
 const { CHAIN_ID } = require("./config");
 
 const CACHE_KEY = `${CHAIN_ID}_cw721_contracts`;
@@ -24,7 +25,7 @@ async function appendCw721sContractsData(redisClient, data) {
 
   const newData = {
     lastOffset: data.lastOffset,
-    data: [...new Set([...oldData.data, ...data.data])],
+    data: [uniqBy([...oldData.data, ...data.data], (data) => data.contractAddress)],
   };
 
   await redisClient.set(CACHE_KEY, JSON.stringify(newData));
