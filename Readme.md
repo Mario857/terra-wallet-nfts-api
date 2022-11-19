@@ -31,14 +31,16 @@ curl localhost:3020/nft-wallet/<Terra Wallet Address>
 ```bash
 # install node modules
 npm install
+
 # add following variables to .env
 RPC_URL=<RPC_URL>
 CHAIN_ID=<CHAIN_ID>
 LCD_URL=<LCD_URL>
 API_PORT=<API_PORT>
 REDIS_URL=<REDIS_URL>
+
 # run app
-node run src/index.js
+node src/index.js
 
 # Replace <terra1-wallet-address> with wallet you want to query
 curl localhost:3000/nft-wallet/<Terra Wallet Address>
