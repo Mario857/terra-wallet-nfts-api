@@ -61,6 +61,7 @@ async function syncAllInitializedCw721Contracts(lcdClient, redisClient) {
       const cw721Addresses = compact(
         rawCw721s.map(([error, result]) => {
           if (error) {
+            console.error(`[syncAllInitializedCw721Contracts-cw721Addresses]: ${error}`);
             return null;
           }
           if (!isNil(result) && result?.count) {
@@ -80,6 +81,7 @@ async function syncAllInitializedCw721Contracts(lcdClient, redisClient) {
       const contractInfos = compact(
         rawContractInfos.map(([error, result]) => {
           if (error) {
+            console.error(`[syncAllInitializedCw721Contracts contractInfos]: ${error}`);
             return null;
           }
           if (!isNil(result) && result?.name) {

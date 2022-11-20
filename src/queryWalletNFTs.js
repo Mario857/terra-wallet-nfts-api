@@ -26,8 +26,9 @@ async function queryUntilEnd(userAddress, cw721s) {
       }))
     );
 
-    for await (const [error, data] of ownerIds) {
+    for (const [error, data] of ownerIds) {
       if (error || !data) {
+        console.error(`[Query Wallet NFTs]: ${error}`);
         processingAddresses = {
           ...processingAddresses,
           [data.contractAddress]: { completed: true, startAfter: undefined },
@@ -50,9 +51,7 @@ async function queryUntilEnd(userAddress, cw721s) {
 }
 
 async function queryWalletNFTs(userAddress, cw721s) {
-  console.time("tokensIdsByContractAddress");
   const tokensIdsByContractAddress = await queryUntilEnd(userAddress, cw721s);
-  console.timeEnd("tokensIdsByContractAddress");
 
   const ownedTokensInfo = await batchContractQuery(
     tokensIdsByContractAddress.map(({ tokenId, contractAddress }) => ({
