@@ -2,17 +2,19 @@ const { compact, last } = require("lodash");
 const { formatResponse } = require("./formatResponse");
 const { batchContractQuery } = require("./wasm");
 
-async function queryUntilEnd(userAddress, cw721Addresses) {
+async function queryUntilEnd(userAddress, cw721s) {
   let processingAddresses = Object.fromEntries(
-    cw721Addresses.map((address) => [address, { completed: false, startAfter: undefined }])
+    cw721s.map(({ contractAddress }) => [contractAddress, { completed: false, startAfter: undefined }])
   );
 
   const result = [];
   const LIMIT = 30;
   do {
-    const filteredCw721Addresses = cw721Addresses.filter((address) => !processingAddresses[address].completed);
+    const filteredCw721Addresses = cw721s.filter(
+      ({ contractAddress }) => !processingAddresses[contractAddress].completed
+    );
     const ownerIds = await batchContractQuery(
-      filteredCw721Addresses.map((contractAddress) => ({
+      filteredCw721Addresses.map(({ contractAddress }) => ({
         contractAddress,
         query: {
           tokens: {
@@ -24,38 +26,33 @@ async function queryUntilEnd(userAddress, cw721Addresses) {
       }))
     );
 
-    const tokensIdsByContractAddress = compact(
-      ownerIds.flatMap(([error, data], index) => {
-        if (error) {
-          return null;
-        }
-
-        const tokens = data?.tokens ?? data.ids ?? [];
-
+    for await (const [error, data] of ownerIds) {
+      if (error || !data) {
         processingAddresses = {
           ...processingAddresses,
-          [filteredCw721Addresses[index]]: { completed: error ? true : !last(tokens), startAfter: last(tokens) },
+          [data.contractAddress]: { completed: true, startAfter: undefined },
         };
+        continue;
+      }
 
-        if (!tokens.length) {
-          return null;
-        }
+      const tokens = data?.tokens ?? data.ids ?? [];
 
-        return tokens.map((tokenId) => ({ tokenId, contractAddress: data.contractAddress }));
-      })
-    );
+      processingAddresses = {
+        ...processingAddresses,
+        [data.contractAddress]: { completed: !last(tokens), startAfter: last(tokens) },
+      };
 
-    result.push(tokensIdsByContractAddress);
+      result.push(tokens.map((tokenId) => ({ tokenId, contractAddress: data.contractAddress })));
+    }
   } while (Object.values(processingAddresses).some((process) => !process.completed));
 
   return result.flat();
 }
 
 async function queryWalletNFTs(userAddress, cw721s) {
-  const tokensIdsByContractAddress = await queryUntilEnd(
-    userAddress,
-    cw721s.map((cw721) => cw721.contractAddress)
-  );
+  console.time("tokensIdsByContractAddress");
+  const tokensIdsByContractAddress = await queryUntilEnd(userAddress, cw721s);
+  console.timeEnd("tokensIdsByContractAddress");
 
   const ownedTokensInfo = await batchContractQuery(
     tokensIdsByContractAddress.map(({ tokenId, contractAddress }) => ({
@@ -81,7 +78,6 @@ async function queryWalletNFTs(userAddress, cw721s) {
       return null;
     })
   );
-
 
   return formatResponse(ownedTokensParsed);
 }
