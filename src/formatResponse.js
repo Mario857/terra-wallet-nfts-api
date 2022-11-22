@@ -29,8 +29,8 @@ async function formatResponse(data) {
       camelCasedData,
       async (cw721Info) => {
         let talisMeta = undefined;
-        if ((cw721Info?.info?.tokenUri ?? "").includes("talis")) {
-          const [error, response] = await asyncAction(await axios.get(cw721Info?.info?.tokenUri));
+        if ((cw721Info?.tokenUri ?? "").includes("talis")) {
+          const [error, response] = await asyncAction(await axios.get(cw721Info?.tokenUri));
 
           if (error) {
             talisMeta = undefined;
@@ -49,8 +49,7 @@ async function formatResponse(data) {
           }
         }
 
-        const attributes =
-          (talisMeta?.attributes ? talisMeta?.attributes : cw721Info?.info?.extension?.attributes) ?? [];
+        const attributes = (talisMeta?.attributes ? talisMeta?.attributes : cw721Info?.extension?.attributes) ?? [];
 
         return {
           tokenId: cw721Info.tokenId,
@@ -59,12 +58,11 @@ async function formatResponse(data) {
           symbol: cw721Info.symbol ?? "",
           imageUrl: talisMeta
             ? [talisMeta?.media ?? ""]
-            : fromIPFSImageURLtoImageURL(cw721Info?.info?.extension?.image ?? ""),
-          description: talisMeta ? talisMeta?.description ?? "" : cw721Info?.info?.extension?.description ?? "",
-          name: talisMeta ? talisMeta.title : cw721Info?.info?.extension?.name ?? "",
+            : fromIPFSImageURLtoImageURL(cw721Info?.extension?.image ?? ""),
+          description: talisMeta ? talisMeta?.description ?? "" : cw721Info?.extension?.description ?? "",
+          name: talisMeta ? talisMeta.title : cw721Info?.extension?.name ?? "",
           attributes: attributes,
           traits: attributes.map(({ traitType, value }) => [traitType, value]),
-          owner: cw721Info?.access?.owner ?? "",
         };
       },
       { concurrency: 5 }

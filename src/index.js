@@ -48,7 +48,7 @@ app.get("/nft-wallet/:walletAddress", async function (req, res) {
     async function () {
       let cache = await getCw721sContractsData(redisClient);
 
-      return queryWalletNFTs(walletAddress, cache.data ?? []);
+      return queryWalletNFTs(redisClient, walletAddress, cache.data ?? []);
     },
     function (error, result) {
       if (error) {
